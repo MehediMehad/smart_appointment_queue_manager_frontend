@@ -1,6 +1,7 @@
+// app/dashboard/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   Card,
@@ -13,8 +14,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import Sidebar from "@/components/layout/Sidebar";
-import { BASE_URL } from "@/lib/BaseUrl";
-// import { getAuthAction } from "@/actions/auth-actions";   // if you want to use it
+import {
+  getDashboardSummary,
+  getRecentActivityLogs,
+} from "@/actions/dashboard";
 
 interface DashboardSummary {
   totalToday: number;
@@ -23,7 +26,7 @@ interface DashboardSummary {
   waitingQueue: number;
   staffLoad: Array<{
     name: string;
-    load: string;
+    load: string; // e.g. "3/5"
     status: string;
     serviceType?: string;
   }>;
@@ -32,12 +35,25 @@ interface DashboardSummary {
 
 interface ActivityLog {
   id: string;
-  time: string;
+  time?: string; // maybe your API sends this
   message: string;
   action?: string;
   staffName?: string | null;
   customerName?: string | null;
-  createdAt: string;
+  createdAt: string; // we'll format this
+}
+
+function formatLogTime(dateStr: string): string {
+  try {
+    const date = new Date(dateStr);
+    return date.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+  } catch {
+    return "—";
+  }
 }
 
 export default function DashboardPage() {
@@ -46,94 +62,82 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Optional: fetch current user name from token / context
-  const [userName, setUserName] = useState<string>("User");
-  const token =
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI2OTc2ZTE1NjlhM2Q0MzkzNTRhNjZlMjgiLCJyb2xlIjoiVVNFUiIsImVtYWlsIjoibW9kZXJ0b3JAMTIwMGIuY29tIiwiaWF0IjoxNzY5NDQ4Njk2LCJleHAiOjE3Njk0NDk1OTZ9.wc4HXV8SHWVyYAc3tTOcQ017rZOUB2_pKbMlIs7FUfw";
+  const [isPending, startTransition] = useTransition();
+
+  const userName = "Mehedi"; // ← you can later get from auth context / token
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
+    const loadDashboard = () => {
+      startTransition(async () => {
         setLoading(true);
         setError(null);
 
-        // 1. Dashboard summary
-        const summaryRes = await fetch(`${BASE_URL}/dashboard/summary`, {
-          credentials: "include", // important if using cookies
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        try {
+          // 1. Summary
+          const summaryRes = await getDashboardSummary();
+          console.log(".......................<<<<", summaryRes);
 
-        if (!summaryRes.ok) throw new Error("Failed to load dashboard summary");
+          if (!summaryRes.success) {
+            throw new Error(summaryRes.message ?? "Failed to load summary");
+          }
+          setSummary(summaryRes.data); // assuming it returns the data directly
 
-        const summaryJson = await summaryRes.json();
-        if (summaryJson.success) {
-          setSummary(summaryJson.data);
+          // 2. Recent logs
+          const logsRes = await getRecentActivityLogs(8);
+          if (!logsRes.success) {
+            throw new Error(logsRes.message ?? "Failed to load activity logs");
+          }
+          setLogs(logsRes.data ?? []);
+        } catch (err: any) {
+          console.error("Dashboard load error:", err);
+          setError(err.message || "Could not load dashboard data");
+        } finally {
+          setLoading(false);
         }
-
-        // 2. Recent activity logs (you can adjust limit / filters)
-        const logsRes = await fetch(
-          `${BASE_URL}/dashboard/recent-activity-logs?limit=8`,
-          {
-            credentials: "include", // important if using cookies
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-          },
-        );
-
-        if (!logsRes.ok) throw new Error("Failed to load activity logs");
-
-        const logsJson = await logsRes.json();
-        if (logsJson.success) {
-          setLogs(logsJson.data || []);
-        }
-      } catch (err: any) {
-        setError(err.message || "Something went wrong while loading dashboard");
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
+      });
     };
 
-    fetchDashboardData();
+    loadDashboard();
 
-    // Optional: refresh every 60–120 seconds
-    // const interval = setInterval(fetchDashboardData, 90000);
+    // Optional: refresh every 2 minutes
+    // const interval = setInterval(loadDashboard, 120_000);
     // return () => clearInterval(interval);
   }, []);
 
-  // Loading state
-  if (loading) {
+  // ── Loading ───────────────────────────────────────────────
+  if (loading || isPending) {
     return (
       <div className="flex h-screen bg-background">
         <Sidebar />
-        <div className="flex-1 p-8 space-y-8">
+        <div className="flex-1 p-6 md:p-8 space-y-8">
           <Skeleton className="h-10 w-64" />
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {Array(4)
               .fill(0)
               .map((_, i) => (
-                <Skeleton key={i} className="h-32 rounded-lg" />
+                <Skeleton key={i} className="h-32 rounded-xl" />
               ))}
           </div>
-          <Skeleton className="h-96 rounded-lg" />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Skeleton className="h-[420px] rounded-xl lg:col-span-2" />
+            <Skeleton className="h-[420px] rounded-xl" />
+          </div>
+          <Skeleton className="h-64 rounded-xl" />
         </div>
       </div>
     );
   }
 
-  // Error state
   if (error) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
-        <div className="text-center space-y-4">
-          <p className="text-destructive text-xl">Error</p>
-          <p>{error}</p>
-          <Button onClick={() => window.location.reload()}>Retry</Button>
+        <div className="text-center space-y-5 max-w-md px-6">
+          <div className="text-6xl">😕</div>
+          <h2 className="text-2xl font-semibold text-destructive">Oops!</h2>
+          <p className="text-muted-foreground">{error}</p>
+          <Button onClick={() => window.location.reload()} size="lg">
+            Try Again
+          </Button>
         </div>
       </div>
     );
@@ -141,26 +145,24 @@ export default function DashboardPage() {
 
   return (
     <div className="flex h-screen bg-background">
-      {/* Sidebar */}
       <Sidebar />
 
-      {/* Main Content */}
       <div className="flex-1 overflow-auto">
-        <div className="p-6 md:p-8">
+        <div className="p-6 md:p-8 space-y-8">
           {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
-            <p className="text-muted-foreground mt-1">
-              Welcome back, {userName}!
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+            <p className="text-muted-foreground mt-1.5">
+              Welcome back, {userName}
             </p>
           </div>
 
           {/* KPI Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             <StatCard
-              title="Total Appointments"
+              title="Total Today"
               value={summary?.totalToday ?? 0}
-              sub="Today"
+              sub="Appointments"
               color="text-primary"
             />
             <StatCard
@@ -172,81 +174,79 @@ export default function DashboardPage() {
             <StatCard
               title="Pending"
               value={summary?.pending ?? 0}
-              sub="Scheduled / Waiting"
+              sub="Scheduled"
               color="text-blue-600 dark:text-blue-500"
             />
             <StatCard
               title="Waiting Queue"
               value={summary?.waitingQueue ?? 0}
-              sub="Pending Assignment"
+              sub="Unassigned"
               color="text-orange-600 dark:text-orange-500"
             />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Staff Load */}
-            <Card className="lg:col-span-2 border shadow-sm">
+            <Card className="lg:col-span-2">
               <CardHeader>
-                <CardTitle>Staff Load ({summary?.date || "—"})</CardTitle>
-                <CardDescription>Current appointment capacity</CardDescription>
+                <CardTitle>Staff Load – {summary?.date || "Today"}</CardTitle>
+                <CardDescription>
+                  Current appointment distribution
+                </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-5">
+                <div className="space-y-5 pt-2">
                   {summary?.staffLoad?.length ? (
-                    summary.staffLoad.map((staff, i) => (
-                      <StaffLoadItem key={i} staff={staff} />
+                    summary.staffLoad.map((staff, index) => (
+                      <StaffLoadItem key={index} staff={staff} />
                     ))
                   ) : (
-                    <p className="text-muted-foreground text-center py-8">
-                      No staff data available today
-                    </p>
+                    <div className="text-center py-12 text-muted-foreground">
+                      No staff load data available today
+                    </div>
                   )}
                 </div>
               </CardContent>
             </Card>
 
             {/* Quick Actions */}
-            <Card className="border shadow-sm">
+            <Card>
               <CardHeader>
                 <CardTitle>Quick Actions</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <Link href="/appointments/new">
-                  <Button className="w-full">New Appointment</Button>
-                </Link>
-                <Link href="/queue">
-                  <Button variant="outline" className="w-full">
-                    Manage Waiting Queue
-                  </Button>
-                </Link>
-                <Link href="/staff">
-                  <Button variant="outline" className="w-full">
-                    Manage Staff
-                  </Button>
-                </Link>
+              <CardContent className="grid gap-3">
+                <Button asChild>
+                  <Link href="/appointments/new">New Appointment</Link>
+                </Button>
+                <Button variant="outline" asChild>
+                  <Link href="/queue">Manage Waiting Queue</Link>
+                </Button>
+                <Button variant="outline" asChild>
+                  <Link href="/staff">Manage Staff</Link>
+                </Button>
               </CardContent>
             </Card>
           </div>
 
           {/* Recent Activity */}
-          <Card className="mt-6 border shadow-sm">
+          <Card>
             <CardHeader>
               <CardTitle>Recent Activity</CardTitle>
-              <CardDescription>Latest system events</CardDescription>
+              <CardDescription>Last actions in the system</CardDescription>
             </CardHeader>
             <CardContent>
               {logs.length > 0 ? (
-                <div className="space-y-4">
+                <div className="space-y-4 divide-y">
                   {logs.map((log) => (
                     <div
                       key={log.id}
-                      className="flex items-start gap-4 pb-4 border-b last:border-0 last:pb-0"
+                      className="pt-4 first:pt-0 flex items-start gap-4"
                     >
                       <div className="w-2 h-2 rounded-full bg-primary mt-2 shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm">{log.message}</p>
-                        <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
-                          <span>{log.time}</span>
+                        <p className="text-sm leading-relaxed">{log.message}</p>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                          <span>{formatLogTime(log.createdAt)}</span>
                           {log.staffName && <span>• {log.staffName}</span>}
                           {log.action && (
                             <Badge variant="outline" className="text-xs">
@@ -259,9 +259,9 @@ export default function DashboardPage() {
                   ))}
                 </div>
               ) : (
-                <p className="text-muted-foreground text-center py-10">
-                  No recent activity
-                </p>
+                <div className="text-center py-12 text-muted-foreground">
+                  No recent activity to show
+                </div>
               )}
             </CardContent>
           </Card>
@@ -271,7 +271,7 @@ export default function DashboardPage() {
   );
 }
 
-// ── Reusable small components ──
+// ── Reusable Components ────────────────────────────────────
 function StatCard({
   title,
   value,
@@ -284,14 +284,14 @@ function StatCard({
   color?: string;
 }) {
   return (
-    <Card className="border-0 shadow-sm hover:shadow transition-shadow">
+    <Card className="border shadow-sm hover:shadow-md transition-shadow">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">
           {title}
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className={`text-2xl md:text-3xl font-bold ${color}`}>{value}</div>
+        <div className={`text-3xl font-bold ${color}`}>{value}</div>
         <p className="text-xs text-muted-foreground mt-1">{sub}</p>
       </CardContent>
     </Card>
@@ -307,32 +307,38 @@ function StaffLoadItem({
   const percentage = max > 0 ? (current / max) * 100 : 0;
 
   return (
-    <div className="flex items-center justify-between gap-4">
+    <div className="flex items-center justify-between gap-5">
       <div className="flex-1 min-w-0">
         <p className="font-medium truncate">
-          {staff.name} {staff.serviceType && `(${staff.serviceType})`}
+          {staff.name}
+          {staff.serviceType && (
+            <span className="text-muted-foreground text-sm">
+              {" "}
+              ({staff.serviceType})
+            </span>
+          )}
         </p>
-        <div className="mt-2 bg-muted rounded-full h-2.5 overflow-hidden">
+        <div className="mt-2.5 bg-muted rounded-full h-2.5 overflow-hidden">
           <div
-            className={`h-full rounded-full transition-all ${
+            className={`h-full rounded-full transition-all duration-500 ${
               percentage >= 100
                 ? "bg-red-500"
                 : percentage >= 80
                   ? "bg-orange-500"
                   : "bg-primary"
             }`}
-            style={{ width: `${percentage}%` }}
+            style={{ width: `${Math.min(percentage, 100)}%` }}
           />
         </div>
       </div>
-      <div className="text-right whitespace-nowrap">
-        <p className="font-medium">{staff.load}</p>
+      <div className="text-right shrink-0">
+        <p className="font-semibold tabular-nums">{staff.load}</p>
         <Badge
           variant="secondary"
           className={
             staff.status === "BOOKED"
-              ? "bg-red-100 text-red-800 hover:bg-red-100"
-              : "bg-green-100 text-green-800 hover:bg-green-100"
+              ? "bg-red-100 text-red-800 hover:bg-red-100 dark:bg-red-950 dark:text-red-300"
+              : "bg-green-100 text-green-800 hover:bg-green-100 dark:bg-green-950 dark:text-green-300"
           }
         >
           {staff.status}
