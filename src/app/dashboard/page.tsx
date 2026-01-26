@@ -18,6 +18,7 @@ import {
   getDashboardSummary,
   getRecentActivityLogs,
 } from "@/actions/dashboard";
+import { getAuthAction } from "@/actions/auth";
 
 interface DashboardSummary {
   totalToday: number;
@@ -43,6 +44,15 @@ interface ActivityLog {
   createdAt: string; // we'll format this
 }
 
+interface CurrentUser {
+  userId: string;
+  name: string;
+  email: string;
+  role: string;
+  iat: number;
+  exp: number;
+}
+
 function formatLogTime(dateStr: string): string {
   try {
     const date = new Date(dateStr);
@@ -64,8 +74,6 @@ export default function DashboardPage() {
 
   const [isPending, startTransition] = useTransition();
 
-  const userName = "Mehedi"; // ← you can later get from auth context / token
-
   useEffect(() => {
     const loadDashboard = () => {
       startTransition(async () => {
@@ -75,7 +83,6 @@ export default function DashboardPage() {
         try {
           // 1. Summary
           const summaryRes = await getDashboardSummary();
-          console.log(".......................<<<<", summaryRes);
 
           if (!summaryRes.success) {
             throw new Error(summaryRes.message ?? "Failed to load summary");
@@ -152,9 +159,7 @@ export default function DashboardPage() {
           {/* Header */}
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-            <p className="text-muted-foreground mt-1.5">
-              Welcome back, {userName}
-            </p>
+            <p className="text-muted-foreground mt-1.5">Welcome back</p>
           </div>
 
           {/* KPI Cards */}

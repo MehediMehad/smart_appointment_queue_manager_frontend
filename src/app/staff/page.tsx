@@ -1,9 +1,11 @@
-const StaffPage = () => {
+import StaffPage from "@/components/pages/Staff/page";
+
+const Page = () => {
   return (
-    <div>
-      <h1>This is StaffPage component</h1>
-    </div>
+    <>
+      <StaffPage />
+    </>
   );
 };
 
-export default StaffPage;
+export default Page;
