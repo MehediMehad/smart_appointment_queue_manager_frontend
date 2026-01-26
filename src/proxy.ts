@@ -8,51 +8,42 @@ const AUTH_COOKIE_NAME = "accessToken";
 
 export function proxy(req: NextRequest) {
     const pathname = req.nextUrl.pathname;
-
-    const PUBLIC = ["/login", "/signup", "/favicon.ico", "/unauthorized"];
-    const AUTH_PAGES = ["/login", "/signup"];
-
     const token = req.cookies.get(AUTH_COOKIE_NAME)?.value;
-    console.log({ pathname });
 
+    const PUBLIC_ROUTES = ["/", "/signup", "/unauthorized"];
 
-    // Logged-in user trying to access login/signup → redirect home
-    if (token && AUTH_PAGES.includes(pathname)) {
-        return NextResponse.redirect(new URL("/", req.url));
-    }
-
-    // Access Public pages or static files → allow
+    // ✅ Allow public & static routes
     if (
-        PUBLIC.includes(pathname) ||
+        PUBLIC_ROUTES.includes(pathname) ||
         pathname.startsWith("/_next") ||
-        pathname.startsWith("/static") ||
-        pathname.startsWith("/api/auth")
+        pathname.startsWith("/favicon.ico")
     ) {
+        // Logged-in user should NOT stay on login/signup
+        if (token && (pathname === "/" || pathname === "/signup")) {
+            return NextResponse.redirect(new URL("/dashboard", req.url));
+        }
         return NextResponse.next();
     }
 
-    // Non - logged -in user trying to access protected page → login
+    // ❌ Not logged in → redirect to login
     if (!token) {
-        return NextResponse.redirect(new URL("/login", req.url));
+        return NextResponse.redirect(new URL("/", req.url));
     }
 
-    // Token decode
-    let decoded: TUserPayload | null = null;
-
+    // Decode token
+    let decoded: TUserPayload;
     try {
         decoded = jwtDecode<TUserPayload>(token);
     } catch {
-        return NextResponse.redirect(new URL("/login", req.url));
+        return NextResponse.redirect(new URL("/", req.url));
     }
 
     const role = decoded.role;
 
-    // Role-based access control
+    // Role based access
     for (const routePrefix in roleRoutes) {
         if (pathname.startsWith(routePrefix)) {
-            const allowed = roleRoutes[routePrefix];
-            if (!allowed.includes(role)) {
-                // Redirect to unauthorized page 
+            if (!roleRoutes[routePrefix].includes(role)) {
                 return NextResponse.redirect(new URL("/unauthorized", req.url));
             }
         }
@@ -62,7 +53,5 @@ export function proxy(req: NextRequest) {
 }
 
 export const config = {
-    matcher: [
-        "/((?!_next|api|favicon.ico|static).*)",
-    ],
+    matcher: ["/((?!_next|api|favicon.ico).*)"],
 };
