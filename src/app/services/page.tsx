@@ -1,9 +1,7 @@
+import Services from "@/components/pages/Services/Services";
+
 const ServicesPage = async () => {
-  return (
-    <div>
-      <h1>This is ServicesPage component</h1>
-    </div>
-  );
+  return <Services />;
 };
 
 export default ServicesPage;
