@@ -133,7 +133,7 @@ export default function Services() {
         )}
 
         {/* Table View */}
-        <ServicesTable services={services} />
+        {/* <ServicesTable services={services} /> */}
       </div>
       <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
         <AlertDialogContent>

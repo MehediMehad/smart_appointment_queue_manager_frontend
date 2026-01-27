@@ -56,6 +56,63 @@ export const getAllServices = async (page = 1, limit = 10) => {
   }
 };
 
+export const createService = async (serviceData: {
+  name: string;
+  requiredStaffType: string;
+  durationMinutes: number;
+  status: "Available" | "OnLeave";
+}) => {
+  try {
+    const accessToken = (await cookies()).get("accessToken")?.value;
+
+    if (!accessToken) {
+      return {
+        success: false,
+        message: "No access token found. Please login again.",
+      };
+    }
+
+    const url = `${BASE_URL}/services`;
+    console.log("🟢 Creating Service at:", url);
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(serviceData),
+    });
+
+    const text = await res.text();
+    let data;
+
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { success: false, message: text };
+    }
+
+    if (!res.ok) {
+      console.error("❌ createService failed:", data);
+      return {
+        success: false,
+        message: data.message || `Failed to create service: ${res.status}`,
+      };
+    }
+
+    revalidateTag("SERVICES_LIST", "page");
+
+    return data;
+  } catch (error: any) {
+    console.error("❌ createService Error:", error);
+    return {
+      success: false,
+      message: error.message || "Something went wrong while creating service",
+    };
+  }
+};
+
 export const deleteService = async (id: string) => {
   try {
     const accessToken = (await cookies()).get("accessToken")?.value;

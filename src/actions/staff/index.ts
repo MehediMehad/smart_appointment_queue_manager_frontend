@@ -16,7 +16,7 @@ export const getAllStaff = async (page = 1, limit = 25) => {
             };
         }
 
-        const url = `${BASE_URL}/staff?page=${page}&limit=${limit}`;
+        const url = `${BASE_URL}/staff?type=my_staff&page=${page}&limit=${limit}`;
         console.log("🟢 Fetching Staff from:", url);
 
         const res = await fetch(url, {
