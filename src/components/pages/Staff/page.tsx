@@ -15,7 +15,7 @@ import { getAllStaff, updateStaffStatus } from "@/actions/staff"; // adjust path
 
 // Adjust interface to match real API response
 interface Staff {
-  id: string; // changed from number → string (MongoDB ObjectId)
+  id: string;
   name: string;
   serviceType: string;
   dailyCapacity: number;
