@@ -1,29 +1,42 @@
+// next.config.ts
+import type { NextConfig } from "next";
 
+const nextConfig: NextConfig = {
+  reactStrictMode: true,
 
-
-// next.config.js
-/** @type {import('next').NextConfig} */
-
-const nextConfig: import('next').NextConfig = {
   async rewrites() {
     return [
       {
-        source: '/api/v1/:path*',
-        // destination: 'http://192.168.0.101:3001/:path*',
-        destination: 'http://backend:3001/:path*',
+        source: "/api/v1/:path*",
+        destination:
+          process.env.NODE_ENV === "development"
+            ? "http://localhost:7099/:path*"
+            : "https://smart-appointment-queue-manager-gwawn5tov.vercel.app/:path*",
       },
-    ]
+    ];
   },
-  reactStrictMode: true,
+
   images: {
-    domains: ['i.pinimg.com', "images.unsplash.com"],
     remotePatterns: [
       {
-        protocol: 'https',
-        hostname: '*.googleusercontent.com',
+        protocol: "https",
+        hostname: "i.pinimg.com",
+      },
+      {
+        protocol: "https",
+        hostname: "images.unsplash.com",
+      },
+      {
+        protocol: "https",
+        hostname: "*.googleusercontent.com",
+      },
+      {
+        protocol: "https",
+        hostname: "advocatoriowebclick.s3.eu-north-1.amazonaws.com",
       },
     ],
   },
 };
 
-module.exports = nextConfig;
+export default nextConfig;
+
