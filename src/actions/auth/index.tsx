@@ -1,4 +1,5 @@
 "use server";
+
 import { BASE_URL } from "@/lib/BaseUrl";
 import { cookies } from "next/headers";
 import { FieldValues } from "react-hook-form";
@@ -16,23 +17,22 @@ export const signupAction = async (userData: FieldValues) => {
     });
 
     const result = await res.json();
-    const storeCookies = await cookies();
 
     if (result.success) {
-      storeCookies.set({
+      (await cookies()).set({
         name: AUTH_COOKIE_NAME,
         value: result.data.accessToken,
         httpOnly: true,
-        secure: true,
+        secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         path: "/",
       });
     }
 
     return result;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    return Error(error);
+    console.error("Signup Error:", error);
+    return { success: false, message: error.message || "Something went wrong" };
   }
 };
 
@@ -45,40 +45,36 @@ export const loginAction = async (userData: FieldValues) => {
     });
 
     const result = await res.json();
-    const storeCookies = await cookies();
 
     if (result.success) {
-      storeCookies.set({
+      (await cookies()).set({
         name: AUTH_COOKIE_NAME,
         value: result.data.accessToken,
         httpOnly: true,
-        secure: true,
+        secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         path: "/",
       });
     }
 
     return result;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    return Error(error);
+    console.error("Login Error:", error);
+    return { success: false, message: error.message || "Something went wrong" };
   }
 };
 
 export const getAuthAction = async (): Promise<TUserPayload | null> => {
-  const storeCookies = await cookies();
-  const accessToken = storeCookies.get(AUTH_COOKIE_NAME)?.value;
-  let decodedData = null;
-
-  if (accessToken) {
-    decodedData = await jwtDecode(accessToken);
-    return decodedData;
-  } else {
+  try {
+    const accessToken = (await cookies()).get(AUTH_COOKIE_NAME)?.value;
+    if (!accessToken) return null;
+    return jwtDecode<TUserPayload>(accessToken);
+  } catch (error) {
+    console.error("getAuthAction Error:", error);
     return null;
   }
 };
 
 export const logoutAction = async () => {
-  const storeCookies = await cookies();
-  storeCookies.delete(AUTH_COOKIE_NAME);
+  (await cookies()).delete(AUTH_COOKIE_NAME);
 };
