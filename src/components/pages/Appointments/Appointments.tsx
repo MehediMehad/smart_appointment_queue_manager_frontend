@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { format, startOfToday, parseISO } from "date-fns";
+import { format, startOfToday, parseISO, addMinutes } from "date-fns";
 import {
   Card,
   CardContent,
@@ -17,7 +17,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-
 import {
   Popover,
   PopoverContent,
@@ -26,8 +25,19 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import toast from "react-hot-toast";
 
 import Sidebar from "@/components/layout/Sidebar";
+import Header from "./Header";
 import {
   getAppointments,
   cancelAppointment,
@@ -35,8 +45,6 @@ import {
 } from "@/actions/appointment";
 import { getAllStaffList } from "@/actions/staff";
 import { getAllServices } from "@/actions/services";
-import Header from "./Header";
-import toast from "react-hot-toast";
 
 // Types
 interface Staff {
@@ -61,6 +69,7 @@ interface Appointment {
   dateTime: string;
   status: "Scheduled" | "Completed" | "Cancelled" | "NoShow" | "Waiting";
   timeSlot: { start: string; end: string };
+  serviceId?: string; // যদি backend থেকে আসে
 }
 
 export default function AppointmentsPage() {
@@ -75,6 +84,17 @@ export default function AppointmentsPage() {
 
   const [services, setServices] = useState<Service[]>([]);
   const [staffList, setStaffList] = useState<Staff[]>([]);
+
+  // Edit Modal states
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editingAppointment, setEditingAppointment] =
+    useState<Appointment | null>(null);
+  const [editForm, setEditForm] = useState({
+    date: "",
+    time: "",
+    staffId: "",
+    status: "" as Appointment["status"],
+  });
 
   const loadAppointments = async () => {
     setLoading(true);
@@ -103,30 +123,67 @@ export default function AppointmentsPage() {
   }, [selectedDate, selectedStaff, selectedStatus]);
 
   useEffect(() => {
-    const fetchStaff = async () => {
+    const fetchData = async () => {
       try {
-        const data = await getAllStaffList();
-        const serviceData = await getAllServices(1, 1000);
+        const [staffRes, serviceRes] = await Promise.all([
+          getAllStaffList(),
+          getAllServices(1, 1000),
+        ]);
 
-        if (data.success) {
-          setStaffList(data.data);
-        }
-
-        if (serviceData.success) {
-          setServices(serviceData.data);
-        }
+        if (staffRes.success) setStaffList(staffRes.data || []);
+        if (serviceRes.success) setServices(serviceRes.data || []);
       } catch (err) {
-        console.error("Failed to load staff list", err);
+        console.error("Failed to load staff/services", err);
       }
     };
-
-    fetchStaff();
+    fetchData();
   }, []);
 
+  const openEditModal = (apt: Appointment) => {
+    setEditingAppointment(apt);
+    const dateObj = parseISO(apt.dateTime);
+    setEditForm({
+      date: format(dateObj, "yyyy-MM-dd"),
+      time: format(dateObj, "HH:mm"),
+      staffId: apt.staffName
+        ? staffList.find((s) => s.name === apt.staffName)?.id || ""
+        : "",
+      status: apt.status,
+    });
+    setIsEditOpen(true);
+  };
+
+  const handleUpdate = async () => {
+    if (!editingAppointment) return;
+
+    const newDateTime = `${editForm.date}T${editForm.time}:00.000Z`;
+
+    const payload = {
+      dateTime: newDateTime,
+      staffId: editForm.staffId || undefined,
+      status: editForm.status,
+    };
+
+    const res = await updateAppointment(editingAppointment.id, payload);
+
+    if (res.success) {
+      toast.success("Appointment updated successfully");
+      setIsEditOpen(false);
+      loadAppointments(); // full refresh – অথবা local state update করতে পারো
+    } else {
+      toast.error(res.message || "Failed to update appointment");
+    }
+  };
+
   const handleCancel = async (id: string) => {
-    if (!confirm("Cancel this appointment?")) return;
+    if (!confirm("Are you sure you want to cancel this appointment?")) return;
     const res = await cancelAppointment(id);
-    if (res.success) loadAppointments();
+    if (res.success) {
+      toast.success("Appointment cancelled");
+      loadAppointments();
+    } else {
+      toast.error(res.message || "Failed to cancel");
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -146,32 +203,11 @@ export default function AppointmentsPage() {
     }
   };
 
-  const handleStatusChange = async (
-    appointmentId: string,
-    newStatus: string,
-  ) => {
-    const res = await updateAppointment(appointmentId, { status: newStatus });
-    if (res.success) {
-      toast.success(`Updated status to ${newStatus}`);
-      // Update local state
-      setAppointments((prev) =>
-        prev.map((apt) =>
-          apt.id === appointmentId
-            ? { ...apt, status: newStatus as Appointment["status"] }
-            : apt,
-        ),
-      );
-    } else {
-      toast.error(res.message || "Failed to update status");
-    }
-  };
-
   return (
     <div className="flex h-screen bg-background">
       <Sidebar />
 
       <div className="flex-1 overflow-auto p-8">
-        {/* <Header /> */}
         <Header />
 
         {/* Filters */}
@@ -179,7 +215,7 @@ export default function AppointmentsPage() {
           {/* Date Picker */}
           <div className="space-y-2">
             <label className="text-sm font-medium">Date</label>
-            <div className="">
+            <div className="mt-1">
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
@@ -196,9 +232,8 @@ export default function AppointmentsPage() {
                 <PopoverContent className="w-auto p-0">
                   <Calendar
                     mode="single"
-                    required
                     selected={selectedDate}
-                    onSelect={(d: Date) => d && setSelectedDate(d)}
+                    onSelect={(d) => d && setSelectedDate(d)}
                     initialFocus
                   />
                 </PopoverContent>
@@ -228,6 +263,7 @@ export default function AppointmentsPage() {
               </SelectContent>
             </Select>
           </div>
+
           {/* Status Filter */}
           <div className="space-y-2">
             <label className="text-sm font-medium">Status</label>
@@ -262,14 +298,16 @@ export default function AppointmentsPage() {
           </CardHeader>
           <CardContent>
             {loading ? (
-              <div>Loading...</div>
+              <div className="py-8 text-center">Loading appointments...</div>
             ) : error ? (
-              <div className="text-red-600">{error}</div>
+              <div className="py-8 text-center text-red-600">{error}</div>
             ) : appointments.length === 0 ? (
-              <div>No appointments found</div>
+              <div className="py-8 text-center text-muted-foreground">
+                No appointments found
+              </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full">
+                <table className="w-full min-w-[800px]">
                   <thead>
                     <tr className="border-b">
                       <th className="text-left py-3 px-4">Customer</th>
@@ -293,59 +331,29 @@ export default function AppointmentsPage() {
                         </td>
                         <td className="py-3 px-4">
                           <span
-                            className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                              apt.status,
-                            )}`}
+                            className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(apt.status)}`}
                           >
                             {apt.status}
                           </span>
                         </td>
-                        <tr key={apt.id} className="border-b hover:bg-muted/50">
-                          <td className="py-3 px-4">
-                            <Select
-                              value={apt.status}
-                              onValueChange={(value) =>
-                                handleStatusChange(apt.id, value)
-                              }
+                        <td className="py-3 px-4 space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openEditModal(apt)}
+                          >
+                            Edit
+                          </Button>
+                          {apt.status === "Scheduled" && (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => handleCancel(apt.id)}
                             >
-                              <SelectTrigger
-                                className={cn(
-                                  "w-[120px] text-left text-sm",
-                                  getStatusColor(apt.status),
-                                )}
-                              >
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="Scheduled">
-                                  Scheduled
-                                </SelectItem>
-                                <SelectItem value="Completed">
-                                  Completed
-                                </SelectItem>
-                                <SelectItem value="Cancelled">
-                                  Cancelled
-                                </SelectItem>
-                                <SelectItem value="NoShow">No-Show</SelectItem>
-                                <SelectItem value="Waiting">Waiting</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </td>
-                          <td className="py-3 px-4 space-x-2">
-                            <Button variant="outline" size="sm">
-                              Edit
+                              Cancel
                             </Button>
-                            {apt.status === "Scheduled" && (
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                onClick={() => handleCancel(apt.id)}
-                              >
-                                Cancel
-                              </Button>
-                            )}
-                          </td>
-                        </tr>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -354,6 +362,102 @@ export default function AppointmentsPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Edit Modal */}
+        <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Edit Appointment</DialogTitle>
+              <DialogDescription>
+                Update time, staff, or status for this appointment.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="grid gap-4 py-4">
+              {/* Date */}
+              <div className="grid gap-2">
+                <label className="text-sm font-medium">Date</label>
+                <Input
+                  type="date"
+                  value={editForm.date}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, date: e.target.value })
+                  }
+                />
+              </div>
+
+              {/* Time */}
+              <div className="grid gap-2">
+                <label className="text-sm font-medium">Time</label>
+                <Input
+                  type="time"
+                  value={editForm.time}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, time: e.target.value })
+                  }
+                />
+              </div>
+
+              {/* Staff */}
+              <div className="grid gap-2">
+                <label className="text-sm font-medium">Assign Staff</label>
+                <Select
+                  value={editForm.staffId || "none"} // show "none" when staffId is empty
+                  onValueChange={(v) =>
+                    setEditForm({
+                      ...editForm,
+                      staffId: v === "none" ? "" : v,
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select staff" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No staff (unassigned)</SelectItem>
+                    {staffList.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name} ({s.currentBookings || 0}/{s.dailyCapacity})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Status */}
+              <div className="grid gap-2">
+                <label className="text-sm font-medium">Status</label>
+                <Select
+                  value={editForm.status}
+                  onValueChange={(v) =>
+                    setEditForm({
+                      ...editForm,
+                      status: v as Appointment["status"],
+                    })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Scheduled">Scheduled</SelectItem>
+                    <SelectItem value="Waiting">Waiting</SelectItem>
+                    <SelectItem value="Completed">Completed</SelectItem>
+                    <SelectItem value="Cancelled">Cancelled</SelectItem>
+                    <SelectItem value="NoShow">No-Show</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsEditOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleUpdate}>Save Changes</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
