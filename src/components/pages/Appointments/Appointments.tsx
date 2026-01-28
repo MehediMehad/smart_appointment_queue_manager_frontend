@@ -29,9 +29,9 @@ import { cn } from "@/lib/utils";
 
 import Sidebar from "@/components/layout/Sidebar";
 import {
-  createAppointment,
   getAppointments,
   cancelAppointment,
+  updateAppointment,
 } from "@/actions/appointment";
 import { getAllStaffList } from "@/actions/staff";
 import { getAllServices } from "@/actions/services";
@@ -48,6 +48,8 @@ interface Staff {
 interface Service {
   id: string;
   name: string;
+  durationMinutes: number;
+  requiredStaffType: string;
 }
 
 interface Appointment {
@@ -140,6 +142,25 @@ export default function AppointmentsPage() {
         return "bg-orange-100 text-orange-800";
       default:
         return "bg-gray-100";
+    }
+  };
+
+  const handleStatusChange = async (
+    appointmentId: string,
+    newStatus: string,
+  ) => {
+    const res = await updateAppointment(appointmentId, { status: newStatus });
+    if (res.success) {
+      // Update local state
+      setAppointments((prev) =>
+        prev.map((apt) =>
+          apt.id === appointmentId
+            ? { ...apt, status: newStatus as Appointment["status"] }
+            : apt,
+        ),
+      );
+    } else {
+      alert(res.message || "Failed to update status");
     }
   };
 
@@ -277,20 +298,52 @@ export default function AppointmentsPage() {
                             {apt.status}
                           </span>
                         </td>
-                        <td className="py-3 px-4 space-x-2">
-                          <Button variant="outline" size="sm">
-                            Edit
-                          </Button>
-                          {apt.status === "Scheduled" && (
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => handleCancel(apt.id)}
+                        <tr key={apt.id} className="border-b hover:bg-muted/50">
+                          <td className="py-3 px-4">
+                            <Select
+                              value={apt.status}
+                              onValueChange={(value) =>
+                                handleStatusChange(apt.id, value)
+                              }
                             >
-                              Cancel
+                              <SelectTrigger
+                                className={cn(
+                                  "w-[120px] text-left text-sm",
+                                  getStatusColor(apt.status),
+                                )}
+                              >
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="Scheduled">
+                                  Scheduled
+                                </SelectItem>
+                                <SelectItem value="Completed">
+                                  Completed
+                                </SelectItem>
+                                <SelectItem value="Cancelled">
+                                  Cancelled
+                                </SelectItem>
+                                <SelectItem value="NoShow">No-Show</SelectItem>
+                                <SelectItem value="Waiting">Waiting</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </td>
+                          <td className="py-3 px-4 space-x-2">
+                            <Button variant="outline" size="sm">
+                              Edit
                             </Button>
-                          )}
-                        </td>
+                            {apt.status === "Scheduled" && (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => handleCancel(apt.id)}
+                              >
+                                Cancel
+                              </Button>
+                            )}
+                          </td>
+                        </tr>
                       </tr>
                     ))}
                   </tbody>

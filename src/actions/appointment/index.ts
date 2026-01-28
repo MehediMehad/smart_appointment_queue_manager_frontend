@@ -45,7 +45,7 @@ export async function createAppointment(formData: FormData) {
     return await res.json();
 }
 
-// Update (edit / cancel)
+// Update 
 export async function updateAppointment(id: string, data: any) {
     const token = (await cookies()).get("accessToken")?.value;
     if (!token) return { success: false, message: "Unauthorized" };
@@ -64,6 +64,16 @@ export async function updateAppointment(id: string, data: any) {
 
 // Delete / Cancel
 export async function cancelAppointment(id: string) {
-    return updateAppointment(id, { status: "Cancelled" });
-    // অথবা DELETE করতে চাইলে method: "DELETE" করো
+    const token = (await cookies()).get("accessToken")?.value;
+    if (!token) return { success: false, message: "Unauthorized" };
+
+    const res = await fetch(`${BASE_URL}/appointments/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+    });
+
+    const data = await res.json();
+    if (!data.success) return data;
+
+    return data;
 }
