@@ -17,8 +17,7 @@ import { getAllStaff } from "@/actions/staff";
 const Header = () => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [staffTypes, setStaffTypes] = useState<{ name: string }[]>([]);
-
+  const [staffTypes, setStaffTypes] = useState<{ serviceType: string }[]>([]);
   const [form, setForm] = useState({
     name: "",
     requiredStaffType: "",
@@ -107,8 +106,8 @@ const Header = () => {
               >
                 <option value="">Select Staff Type</option>
                 {staffTypes.map((type) => (
-                  <option key={type.name} value={type.name}>
-                    {type.name}
+                  <option key={type.serviceType} value={type.serviceType}>
+                    {type.serviceType}
                   </option>
                 ))}
               </select>

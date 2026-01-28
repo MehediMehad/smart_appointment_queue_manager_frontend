@@ -20,9 +20,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import EditServiceModal from "./EditServiceModal";
+
+type HeaderProps = {
+  editingService?: IService | null;
+  onUpdated?: () => void;
+};
 
 export default function Services() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [selectedService, setSelectedService] = useState<IService | null>(null);
 
   const [services, setServices] = useState<IService[]>([]);
   const [page, setPage] = useState(1);
@@ -93,9 +101,17 @@ export default function Services() {
                   </div>
 
                   <div className="flex gap-2">
-                    <Button variant="outline" className="flex-1">
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => {
+                        setSelectedService(service);
+                        setEditOpen(true);
+                      }}
+                    >
                       Edit
                     </Button>
+
                     <Button
                       variant="outline"
                       className="flex-1 text-destructive"
@@ -156,6 +172,13 @@ export default function Services() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <EditServiceModal
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        service={selectedService}
+        onSuccess={() => fetchServices(page)}
+      />
     </div>
   );
 }

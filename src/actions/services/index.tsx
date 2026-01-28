@@ -113,6 +113,58 @@ export const createService = async (serviceData: {
   }
 };
 
+export const updateService = async (id: string, serviceData: any) => {
+  try {
+    const accessToken = (await cookies()).get("accessToken")?.value;
+
+    if (!accessToken) {
+      return {
+        success: false,
+        message: "No access token found. Please login again.",
+      };
+    }
+
+    const url = `${BASE_URL}/services/${id}`;
+    console.log("🟢 Updating Service at:", url);
+
+    const res = await fetch(url, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(serviceData),
+    });
+
+    const text = await res.text();
+    let data;
+
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { success: false, message: text };
+    }
+
+    if (!res.ok) {
+      console.error("❌ updateService failed:", data);
+      return {
+        success: false,
+        message: data.message || `Failed to update service: ${res.status}`,
+      };
+    }
+
+    revalidateTag("SERVICES_LIST", "page");
+
+    return data;
+  } catch (error: any) {
+    console.error("❌ updateService Error:", error);
+    return {
+      success: false,
+      message: error.message || "Something went wrong while updating service",
+    };
+  }
+};
+
 export const deleteService = async (id: string) => {
   try {
     const accessToken = (await cookies()).get("accessToken")?.value;
