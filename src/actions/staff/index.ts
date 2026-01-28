@@ -16,7 +16,63 @@ export const getAllStaff = async (page = 1, limit = 25) => {
             };
         }
 
-        const url = `${BASE_URL}/staff?type=my_staff&page=${page}&limit=${limit}`;
+        const url = `${BASE_URL}/staff?type=my_staffs&page=${page}&limit=${limit}`;
+        console.log("🟢 Fetching Staff from:", url);
+
+        const res = await fetch(url, {
+            method: "GET",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${accessToken}`,
+            },
+            next: {
+                tags: ["STAFF_LIST"],
+            },
+        });
+
+        console.log("🟢 Response status:", res.status, res.statusText);
+
+        const text = await res.text();
+        console.log("🟢 Raw response body:", text);
+
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch {
+            data = { success: false, message: text };
+        }
+
+        if (!res.ok) {
+            console.error("❌ getAllStaff failed:", data);
+            return {
+                success: false,
+                message: data.message || `Failed to fetch staff: ${res.status}`,
+            };
+        }
+
+        return data;
+    } catch (error: any) {
+        console.error("❌ getAllStaff Error:", error);
+        return {
+            success: false,
+            message: error.message || "Something went wrong while fetching staff",
+        };
+    }
+};
+
+export const getAllStaffList = async (page = 1, limit = 25) => {
+    try {
+        const accessToken = (await cookies()).get("accessToken")?.value;
+
+        if (!accessToken) {
+            console.error("❌ No access token found in cookies");
+            return {
+                success: false,
+                message: "No access token found. Please login again.",
+            };
+        }
+
+        const url = `${BASE_URL}/staff/list`;
         console.log("🟢 Fetching Staff from:", url);
 
         const res = await fetch(url, {

@@ -35,7 +35,7 @@ export default function Services() {
   const [services, setServices] = useState<IService[]>([]);
   const [page, setPage] = useState(1);
   const [meta, setMeta] = useState<any>(null);
-  const limit = 6;
+  const limit = 10000;
   const [loading, setLoading] = useState(false);
 
   const fetchServices = async (pageNumber = 1) => {
@@ -73,7 +73,7 @@ export default function Services() {
     <div className="flex h-screen bg-background">
       <Sidebar />
 
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto mb-10">
         <Header />
 
         {/* Cards */}
