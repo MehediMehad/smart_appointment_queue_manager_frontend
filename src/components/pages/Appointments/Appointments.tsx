@@ -36,6 +36,7 @@ import {
 import { getAllStaffList } from "@/actions/staff";
 import { getAllServices } from "@/actions/services";
 import Header from "./Header";
+import toast from "react-hot-toast";
 
 // Types
 interface Staff {
@@ -151,6 +152,7 @@ export default function AppointmentsPage() {
   ) => {
     const res = await updateAppointment(appointmentId, { status: newStatus });
     if (res.success) {
+      toast.success(`Updated status to ${newStatus}`);
       // Update local state
       setAppointments((prev) =>
         prev.map((apt) =>
@@ -160,7 +162,7 @@ export default function AppointmentsPage() {
         ),
       );
     } else {
-      alert(res.message || "Failed to update status");
+      toast.error(res.message || "Failed to update status");
     }
   };
 
