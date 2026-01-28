@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Clock3 } from "lucide-react";
 import Sidebar from "@/components/layout/Sidebar";
 import Header from "./Header";
-import ServicesTable from "./ServicesTable";
 import { getAllServices, deleteService } from "@/actions/services";
 import { IService } from "@/types/service";
 import ServiceSkeleton from "./ServiceSkeleton";

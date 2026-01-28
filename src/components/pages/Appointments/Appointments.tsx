@@ -10,7 +10,6 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -18,15 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+
 import {
   Popover,
   PopoverContent,
@@ -37,7 +28,6 @@ import { CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 import Sidebar from "@/components/layout/Sidebar";
-import Header from "./Header";
 import {
   createAppointment,
   getAppointments,
@@ -45,6 +35,7 @@ import {
 } from "@/actions/appointment";
 import { getAllStaffList } from "@/actions/staff";
 import { getAllServices } from "@/actions/services";
+import Header from "./Header";
 
 // Types
 interface Staff {
@@ -78,16 +69,6 @@ export default function AppointmentsPage() {
   const [selectedDate, setSelectedDate] = useState<Date>(startOfToday());
   const [selectedStaff, setSelectedStaff] = useState<string>("");
   const [selectedStatus, setSelectedStatus] = useState<string>("");
-
-  // Create Modal states
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [formData, setFormData] = useState({
-    customerName: "",
-    serviceId: "",
-    date: format(startOfToday(), "yyyy-MM-dd"),
-    time: "09:00",
-    staffId: "",
-  });
 
   const [services, setServices] = useState<Service[]>([]);
   const [staffList, setStaffList] = useState<Staff[]>([]);
@@ -139,23 +120,6 @@ export default function AppointmentsPage() {
     fetchStaff();
   }, []);
 
-  const handleCreate = async () => {
-    const fd = new FormData();
-    fd.append("customerName", formData.customerName);
-    fd.append("serviceId", formData.serviceId);
-    fd.append("dateTime", `${formData.date}T${formData.time}:00.000Z`);
-    if (formData.staffId) fd.append("staffId", formData.staffId);
-
-    const res = await createAppointment(fd);
-    if (res.success) {
-      setIsCreateOpen(false);
-      loadAppointments();
-      // toast.success("Appointment created")
-    } else {
-      alert(res.message || "Conflict or no staff available");
-    }
-  };
-
   const handleCancel = async (id: string) => {
     if (!confirm("Cancel this appointment?")) return;
     const res = await cancelAppointment(id);
@@ -184,6 +148,7 @@ export default function AppointmentsPage() {
       <Sidebar />
 
       <div className="flex-1 overflow-auto p-8">
+        {/* <Header /> */}
         <Header />
 
         {/* Filters */}
@@ -191,29 +156,31 @@ export default function AppointmentsPage() {
           {/* Date Picker */}
           <div className="space-y-2">
             <label className="text-sm font-medium">Date</label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-60 justify-start text-left font-normal",
-                    !selectedDate && "text-muted-foreground",
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {format(selectedDate, "PPP")}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  mode="single"
-                  required
-                  selected={selectedDate}
-                  onSelect={(d: Date) => d && setSelectedDate(d)}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
+            <div className="">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-60 justify-start text-left font-normal",
+                      !selectedDate && "text-muted-foreground",
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {format(selectedDate, "PPP")}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    required
+                    selected={selectedDate}
+                    onSelect={(d: Date) => d && setSelectedDate(d)}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
           </div>
 
           {/* Staff Filter */}
@@ -260,11 +227,6 @@ export default function AppointmentsPage() {
               </SelectContent>
             </Select>
           </div>
-
-          {/* Create Button */}
-          <Button onClick={() => setIsCreateOpen(true)} className="ml-auto">
-            + Create Appointment
-          </Button>
         </div>
 
         {/* Table */}
@@ -337,115 +299,6 @@ export default function AppointmentsPage() {
             )}
           </CardContent>
         </Card>
-
-        {/* Create Modal */}
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle>Create New Appointment</DialogTitle>
-              <DialogDescription>
-                Fill in the details. System will auto-detect conflicts.
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <label>Customer Name</label>
-                <Input
-                  value={formData.customerName}
-                  onChange={(e) =>
-                    setFormData({ ...formData, customerName: e.target.value })
-                  }
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <label>Staff (optional)</label>
-                <Select
-                  value={formData.staffId}
-                  onValueChange={(v) =>
-                    setFormData({ ...formData, staffId: v })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Auto-assign best available" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="auto">
-                      Auto-assign best available
-                    </SelectItem>
-                    {staffList.map((s) => (
-                      <SelectItem
-                        key={s.id}
-                        value={s.id}
-                        disabled={s.currentBookings! >= s.dailyCapacity}
-                      >
-                        {s.name} ({s.currentBookings}/{s.dailyCapacity})
-                        {s.currentBookings! >= s.dailyCapacity && " - Full"}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid gap-2">
-                <label>Date</label>
-                <Input
-                  type="date"
-                  value={formData.date}
-                  onChange={(e) =>
-                    setFormData({ ...formData, date: e.target.value })
-                  }
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <label>Time</label>
-                <Input
-                  type="time"
-                  value={formData.time}
-                  onChange={(e) =>
-                    setFormData({ ...formData, time: e.target.value })
-                  }
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <label>Staff (optional)</label>
-                <Select
-                  value={formData.staffId}
-                  onValueChange={(v) =>
-                    setFormData({ ...formData, staffId: v })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Auto-assign or select" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Auto-assign best available</SelectItem>
-                    {staffList.map((s) => (
-                      <SelectItem
-                        key={s.id}
-                        value={s.id}
-                        disabled={s.currentBookings! >= s.dailyCapacity}
-                      >
-                        {s.name} ({s.currentBookings}/{s.dailyCapacity})
-                        {s.currentBookings! >= s.dailyCapacity && " - Full"}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleCreate}>Create Appointment</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
     </div>
   );
