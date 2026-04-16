@@ -6,15 +6,14 @@ import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 import { NMTable } from "@/components/shared/core/NMTable";
-
 import { TablePagination } from "@/components/shared/core/TablePagination";
 import { TStaff, TStaffMeta } from "@/types";
 import { getAllStaff, updateStaffStatus } from "@/actions/staff";
+
 import Sidebar from "@/components/layout/Sidebar";
 import dynamic from "next/dynamic";
-import Header from "./Header";
+import StaffCreateForm from "./StaffCreateForm"; // ← New Component
 
-// Lazy load modal (create this file next)
 const ConfirmStaffStatusChangeModal = dynamic(
   () => import("./ConfirmStaffStatusChangeModal"),
 );
@@ -26,8 +25,6 @@ type ConfirmModalState = {
 };
 
 const StaffManagement = () => {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [limit, setLimit] = useState(10);
 
@@ -40,23 +37,12 @@ const StaffManagement = () => {
     hasNextPage: false,
     hasPrevPage: false,
   });
-  const [loading, setLoading] = useState(false);
 
   const [confirmModal, setConfirmModal] = useState<ConfirmModalState>({
     isOpen: false,
     staffId: null,
     currentStatus: null,
   });
-
-  // Debounce search
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearchTerm(searchTerm);
-      setCurrentPage(1);
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
 
   const openConfirmModal = (staff: TStaff) => {
     setConfirmModal({
@@ -89,18 +75,9 @@ const StaffManagement = () => {
   };
 
   const columns: ColumnDef<TStaff>[] = [
-    {
-      accessorKey: "name",
-      header: "Name",
-    },
-    {
-      accessorKey: "serviceType",
-      header: "Service Type",
-    },
-    {
-      accessorKey: "dailyCapacity",
-      header: "Daily Capacity",
-    },
+    { accessorKey: "name", header: "Name" },
+    { accessorKey: "serviceType", header: "Service Type" },
+    { accessorKey: "dailyCapacity", header: "Daily Capacity" },
     {
       accessorKey: "createdAt",
       header: "Join Date",
@@ -136,46 +113,50 @@ const StaffManagement = () => {
       id: "actions",
       header: "Change Status",
       cell: ({ row }) => (
-        <div className="pl-10">
-          <button
-            className="p-2 rounded-md transition bg-gray-200 hover:bg-gray-300 text-gray-900"
-            onClick={() => openConfirmModal(row.original)}
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
-        </div>
+        <button
+          className="p-2 rounded-md transition bg-gray-200 hover:bg-gray-300 text-gray-900"
+          onClick={() => openConfirmModal(row.original)}
+        >
+          <RefreshCw className="w-4 h-4" />
+        </button>
       ),
     },
   ];
 
   const fetchStaffs = async () => {
-    setLoading(true);
     try {
-      const result = await getAllStaff({
-        page: currentPage,
-        limit,
-      });
-
+      const result = await getAllStaff({ page: currentPage, limit });
       setStaffData(result.data || []);
       setMeta(result.meta || {});
     } catch (error) {
       console.error(error);
       toast.error("Failed to fetch staffs.");
-    } finally {
-      setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchStaffs();
-  }, [debouncedSearchTerm, currentPage, limit]);
+  }, [currentPage, limit]);
 
   return (
     <div className="flex h-screen bg-background">
       <Sidebar />
 
       <div className="w-full flex-1 overflow-auto p-8">
-        <Header />
+        {/* Header with Add Button */}
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">
+              Staff Management
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              Manage your team and their availability
+            </p>
+          </div>
+
+          <StaffCreateForm onSuccess={fetchStaffs} />
+        </div>
+
         {/* Table */}
         <NMTable columns={columns} data={staffData} />
 

@@ -5,7 +5,7 @@ import { cookies } from "next/headers";
 
 // Get all staff members
 export const getAllStaff = async (params: { page: number; limit: number }) => {
-    const { page = 1, limit = 25 } = params;
+    const { page, limit } = params;
     try {
         const accessToken = (await cookies()).get("accessToken")?.value;
 
@@ -143,6 +143,7 @@ export const createStaff = async (staffData: {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${accessToken}`,
             },
+            next: { tags: ["STAFF_LIST"] },
             body: JSON.stringify(staffData),
         });
 

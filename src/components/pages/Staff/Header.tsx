@@ -1,5 +1,10 @@
 "use client";
 
+import { useState, useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -9,40 +14,64 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
 import { Plus, Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { toast } from "sonner";
+
 import { createStaff, getAllServices } from "@/actions/staff";
 
-interface NewStaffForm {
-  name: string;
-  serviceType: string;
-  dailyCapacity: number;
-}
+// Zod Schema for Staff
+const staffSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters"),
+  serviceType: z.string().min(1, "Please select a service type"),
+  dailyCapacity: z
+    .number()
+    .min(1, "Daily capacity must be at least 1")
+    .max(100, "Daily capacity cannot exceed 100"),
+});
+
+type TStaffForm = z.infer<typeof staffSchema>;
 
 const Header = () => {
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-
   const [serviceTypes, setServiceTypes] = useState<string[]>([]);
   const [serviceTypesLoading, setServiceTypesLoading] = useState(true);
 
-  const [newStaff, setNewStaff] = useState<NewStaffForm>({
-    name: "",
-    serviceType: "",
-    dailyCapacity: 5,
+  // React Hook Form
+  const form = useForm<TStaffForm>({
+    resolver: zodResolver(staffSchema),
+    defaultValues: {
+      name: "",
+      serviceType: "",
+      dailyCapacity: 5,
+    },
   });
 
-  // Fetch unique service types on mount
+  const isSubmitting = form.formState.isSubmitting;
+
+  // Fetch service types from services
   useEffect(() => {
     const fetchServiceTypes = async () => {
       try {
         const result = await getAllServices(1000);
 
         if (result.success && Array.isArray(result.data)) {
-          // Extract unique requiredStaffType values
           const types = new Set(
             result.data.map((s: any) => s.requiredStaffType).filter(Boolean),
           );
@@ -50,72 +79,42 @@ const Header = () => {
 
           setServiceTypes(typeList);
 
-          // Set default if we have any
+          // Set first service type as default
           if (typeList.length > 0) {
-            setNewStaff((prev) => ({ ...prev, serviceType: typeList[0] }));
+            form.setValue("serviceType", typeList[0]);
           }
-        } else {
-          setError(result.message || "Could not load service types");
         }
-      } catch (err: any) {
-        setError(err.message || "Failed to load service types");
+      } catch (err) {
+        console.error("Failed to load service types:", err);
+        toast.error("Failed to load service types");
       } finally {
         setServiceTypesLoading(false);
       }
     };
 
     fetchServiceTypes();
-  }, []);
+  }, [form]);
 
-  const handleAddStaff = async () => {
-    if (!newStaff.name.trim()) {
-      setError("Name is required");
-      return;
-    }
-    if (!newStaff.serviceType) {
-      setError("Please select a service type");
-      return;
-    }
-    if (newStaff.dailyCapacity < 1) {
-      setError("Daily capacity must be at least 1");
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    setSuccess(false);
-
+  const onSubmit = async (values: TStaffForm) => {
     try {
       const payload = {
-        name: newStaff.name.trim(),
-        serviceType: newStaff.serviceType,
-        dailyCapacity: newStaff.dailyCapacity,
-        status: "Available" as const, // default when creating
+        name: values.name.trim(),
+        serviceType: values.serviceType,
+        dailyCapacity: values.dailyCapacity,
+        status: "Available" as const,
       };
 
       const result = await createStaff(payload);
 
       if (result.success) {
-        setSuccess(true);
-        // Reset form
-        setNewStaff({
-          name: "",
-          serviceType: serviceTypes[0] || "",
-          dailyCapacity: 5,
-        });
-
-        // Optional: close dialog after short delay
-        setTimeout(() => {
-          setOpen(false);
-          setSuccess(false);
-        }, 1500);
+        toast.success("Staff member created successfully!");
+        form.reset();
+        setOpen(false);
       } else {
-        setError(result.message || "Failed to create staff member");
+        toast.error(result.message || "Failed to create staff");
       }
-    } catch (err: any) {
-      setError(err.message || "Something went wrong");
-    } finally {
-      setLoading(false);
+    } catch (error: any) {
+      toast.error(error.message || "Something went wrong");
     }
   };
 
@@ -139,99 +138,114 @@ const Header = () => {
           <DialogHeader>
             <DialogTitle>Add New Staff Member</DialogTitle>
             <DialogDescription>
-              Enter details to add a new team member
+              Enter details to add a new team member to your staff.
             </DialogDescription>
           </DialogHeader>
 
           {serviceTypesLoading ? (
-            <div className="py-6 flex justify-center">
-              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            <div className="py-8 flex justify-center">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
           ) : (
-            <div className="space-y-5 pt-2">
-              {error && (
-                <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
-                  {error}
-                </div>
-              )}
-
-              {success && (
-                <div className="text-sm text-green-600 bg-green-50 p-3 rounded-md">
-                  Staff member created successfully!
-                </div>
-              )}
-
-              <div>
-                <label className="text-sm font-medium block mb-1">Name</label>
-                <Input
-                  placeholder="Dr. John Doe / Nurse Sarah"
-                  value={newStaff.name}
-                  onChange={(e) =>
-                    setNewStaff({ ...newStaff, name: e.target.value })
-                  }
-                  disabled={loading}
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium block mb-1">
-                  Service Type
-                </label>
-                {serviceTypes.length === 0 ? (
-                  <div className="text-sm text-muted-foreground py-2">
-                    No service types available
-                  </div>
-                ) : (
-                  <select
-                    value={newStaff.serviceType}
-                    onChange={(e) =>
-                      setNewStaff({ ...newStaff, serviceType: e.target.value })
-                    }
-                    disabled={loading}
-                    className="w-full px-3 py-2 border border-input rounded-md bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    {serviceTypes.map((type) => (
-                      <option key={type} value={type}>
-                        {type}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
-
-              <div>
-                <label className="text-sm font-medium block mb-1">
-                  Daily Capacity (appointments per day)
-                </label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={newStaff.dailyCapacity}
-                  onChange={(e) =>
-                    setNewStaff({
-                      ...newStaff,
-                      dailyCapacity: parseInt(e.target.value) || 1,
-                    })
-                  }
-                  disabled={loading}
-                />
-              </div>
-
-              <Button
-                onClick={handleAddStaff}
-                disabled={loading}
-                className="w-full bg-primary hover:bg-primary/90 mt-4"
+            <Form {...form}>
+              <form
+                onSubmit={form.handleSubmit(onSubmit)}
+                className="space-y-6"
               >
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  "Create Staff Member"
-                )}
-              </Button>
-            </div>
+                {/* Name Field */}
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Name</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Dr. John Doe or Nurse Sarah"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Service Type Select */}
+                <FormField
+                  control={form.control}
+                  name="serviceType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Service Type</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select service type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {serviceTypes.length > 0 ? (
+                            serviceTypes.map((type) => (
+                              <SelectItem key={type} value={type}>
+                                {type}
+                              </SelectItem>
+                            ))
+                          ) : (
+                            <SelectItem value="" disabled>
+                              No service types available
+                            </SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Daily Capacity */}
+                <FormField
+                  control={form.control}
+                  name="dailyCapacity"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        Daily Capacity (Appointments per day)
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min={1}
+                          max={100}
+                          {...field}
+                          onChange={(e) =>
+                            field.onChange(parseInt(e.target.value) || 1)
+                          }
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Creating Staff...
+                    </>
+                  ) : (
+                    "Create Staff Member"
+                  )}
+                </Button>
+              </form>
+            </Form>
           )}
         </DialogContent>
       </Dialog>
