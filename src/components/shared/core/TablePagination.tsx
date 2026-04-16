@@ -1,6 +1,13 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 interface PaginationProps {
@@ -9,8 +16,8 @@ interface PaginationProps {
   pageSize: number;
   totalItems: number;
   onPageChange: (page: number) => void;
-  onPageSizeChange?: (size: number) => void; // optional
-  pageSizeOptions?: number[]; // optional: [5, 10, 20, 50]
+  onPageSizeChange?: (size: number) => void;
+  pageSizeOptions?: number[]; // default: [5, 10, 20, 50]
 }
 
 export function TablePagination({
@@ -25,19 +32,17 @@ export function TablePagination({
   const startItem = (currentPage - 1) * pageSize + 1;
   const endItem = Math.min(currentPage * pageSize, totalItems);
 
-  // Generate page numbers (with ellipsis logic)
+  // Generate page numbers with ellipsis
   const getPageNumbers = () => {
     const pages: (number | string)[] = [];
 
     if (totalPages <= 7) {
-      // All pages visible if total pages are less than or equal to 7
       for (let i = 1; i <= totalPages; i++) {
         pages.push(i);
       }
       return pages;
     }
 
-    // first 2 + ... + last 2
     pages.push(1);
 
     if (currentPage > 4) {
@@ -75,9 +80,9 @@ export function TablePagination({
         of <span className="font-medium">{totalItems}</span> results
       </div>
 
-      {/* Right: Page selector + buttons */}
+      {/* Right: Pagination Controls */}
       <div className="flex items-center gap-2 flex-wrap justify-center sm:justify-end">
-        {/* Previous */}
+        {/* Previous Button */}
         <Button
           variant="outline"
           size="sm"
@@ -89,17 +94,13 @@ export function TablePagination({
           Prev
         </Button>
 
-        {/* Page numbers */}
+        {/* Page Numbers */}
         {pageNumbers.map((page, idx) => (
           <Button
             key={idx}
             variant={page === currentPage ? "default" : "outline"}
             size="sm"
-            onClick={() => {
-              if (typeof page === "number") {
-                onPageChange(page);
-              }
-            }}
+            onClick={() => typeof page === "number" && onPageChange(page)}
             disabled={page === "..."}
             className={`h-9 w-9 p-0 ${page === "..." ? "cursor-default" : ""}`}
           >
@@ -107,7 +108,7 @@ export function TablePagination({
           </Button>
         ))}
 
-        {/* Next */}
+        {/* Next Button */}
         <Button
           variant="outline"
           size="sm"
@@ -119,19 +120,23 @@ export function TablePagination({
           <ChevronRight className="h-4 w-4 ml-1" />
         </Button>
 
-        {/* Optional: Page size selector */}
+        {/* Page Size Selector using Shadcn Select */}
         {onPageSizeChange && (
-          <select
-            value={pageSize}
-            onChange={(e) => onPageSizeChange(Number(e.target.value))}
-            className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          <Select
+            value={String(pageSize)}
+            onValueChange={(value) => onPageSizeChange(Number(value))}
           >
-            {pageSizeOptions.map((size) => (
-              <option key={size} value={size}>
-                {size} per page
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="h-9 w-[120px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {pageSizeOptions.map((size) => (
+                <SelectItem key={size} value={String(size)}>
+                  {size} per page
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         )}
       </div>
     </div>
