@@ -12,9 +12,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Plus, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { createStaff, getAllServices } from "@/actions/staff"; // adjust import path if needed
+import { createStaff, getAllServices } from "@/actions/staff";
 
-// We'll use this type for the form (status defaults to "Available")
 interface NewStaffForm {
   name: string;
   serviceType: string;

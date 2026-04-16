@@ -1,207 +1,209 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { useState, useEffect } from "react";
+import { ColumnDef } from "@tanstack/react-table";
+import { RefreshCw } from "lucide-react";
+import { toast } from "sonner";
+
+import { NMTable } from "@/components/shared/core/NMTable";
+
+import { TablePagination } from "@/components/shared/core/TablePagination";
+import { TStaff, TStaffMeta } from "@/types";
+import { getAllStaff, updateStaffStatus } from "@/actions/staff";
 import Sidebar from "@/components/layout/Sidebar";
+import dynamic from "next/dynamic";
 import Header from "./Header";
-import { getAllStaff, updateStaffStatus } from "@/actions/staff"; // adjust path if needed
 
-// Adjust interface to match real API response
-interface Staff {
-  id: string;
-  name: string;
-  serviceType: string;
-  dailyCapacity: number;
-  status: "Available" | "OnLeave";
-  createdAt?: string; // optional - exists in API
-  // todayLoad is not in API → we'll show "-" or remove column if not needed
-}
+// Lazy load modal (create this file next)
+const ConfirmStaffStatusChangeModal = dynamic(
+  () => import("./ConfirmStaffStatusChangeModal"),
+);
 
-export default function StaffPage() {
-  const router = useRouter();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [staffList, setStaffList] = useState<Staff[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+type ConfirmModalState = {
+  isOpen: boolean;
+  staffId: string | null;
+  currentStatus: "Available" | "OnLeave" | null;
+};
 
-  // Fetch staff list
-  const fetchStaff = async () => {
-    setLoading(true);
-    setError(null);
+const StaffManagement = () => {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+
+  const [staffData, setStaffData] = useState<TStaff[]>([]);
+  const [meta, setMeta] = useState<TStaffMeta>({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 1,
+    hasNextPage: false,
+    hasPrevPage: false,
+  });
+  const [loading, setLoading] = useState(false);
+
+  const [confirmModal, setConfirmModal] = useState<ConfirmModalState>({
+    isOpen: false,
+    staffId: null,
+    currentStatus: null,
+  });
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+      setCurrentPage(1);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  const openConfirmModal = (staff: TStaff) => {
+    setConfirmModal({
+      isOpen: true,
+      staffId: staff.id,
+      currentStatus: staff.status,
+    });
+  };
+
+  const closeConfirmModal = () => {
+    setConfirmModal({ isOpen: false, staffId: null, currentStatus: null });
+  };
+
+  const confirmStatusChange = async () => {
+    if (!confirmModal.staffId || !confirmModal.currentStatus) return;
+
+    const newStatus =
+      confirmModal.currentStatus === "Available" ? "OnLeave" : "Available";
 
     try {
-      const result = await getAllStaff(1, 25);
+      await updateStaffStatus(confirmModal.staffId, newStatus);
+      toast.success(`Staff status changed to ${newStatus}`);
+      fetchStaffs();
+    } catch (error) {
+      console.error("Status change failed:", error);
+      toast.error("Failed to change staff status.");
+    } finally {
+      closeConfirmModal();
+    }
+  };
 
-      if (result.success && Array.isArray(result.data)) {
-        setStaffList(result.data);
-      } else {
-        setError(result.message || "Failed to load staff members");
-        console.error(result);
-      }
-    } catch (err: any) {
-      setError(err.message || "Network/server error");
-      console.error(err);
+  const columns: ColumnDef<TStaff>[] = [
+    {
+      accessorKey: "name",
+      header: "Name",
+    },
+    {
+      accessorKey: "serviceType",
+      header: "Service Type",
+    },
+    {
+      accessorKey: "dailyCapacity",
+      header: "Daily Capacity",
+    },
+    {
+      accessorKey: "createdAt",
+      header: "Join Date",
+      cell: ({ row }) => {
+        const date = new Date(row.original.createdAt);
+        return date.toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+        });
+      },
+    },
+    {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) => {
+        const status = row.original.status;
+        const colorClass =
+          status === "Available"
+            ? "bg-green-100 text-green-800"
+            : "bg-orange-100 text-orange-800";
+
+        return (
+          <span
+            className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${colorClass}`}
+          >
+            {status}
+          </span>
+        );
+      },
+    },
+    {
+      id: "actions",
+      header: "Change Status",
+      cell: ({ row }) => (
+        <div className="pl-10">
+          <button
+            className="p-2 rounded-md transition bg-gray-200 hover:bg-gray-300 text-gray-900"
+            onClick={() => openConfirmModal(row.original)}
+          >
+            <RefreshCw className="w-4 h-4" />
+          </button>
+        </div>
+      ),
+    },
+  ];
+
+  const fetchStaffs = async () => {
+    setLoading(true);
+    try {
+      const result = await getAllStaff({
+        page: currentPage,
+        limit,
+      });
+
+      setStaffData(result.data || []);
+      setMeta(result.meta || {});
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to fetch staffs.");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    setIsLoggedIn(true);
-
-    fetchStaff();
-  }, [router]);
-
-  // Real API status update + refresh list
-  const handleStatusChange = async (
-    staffId: string,
-    newStatus: "Available" | "OnLeave",
-  ) => {
-    try {
-      const result = await updateStaffStatus(staffId, newStatus);
-
-      if (result.success) {
-        // Option 1: optimistic + refresh
-        setStaffList((prev) =>
-          prev.map((s) => (s.id === staffId ? { ...s, status: newStatus } : s)),
-        );
-
-        // Option 2: just re-fetch (more reliable if other fields can change)
-        await fetchStaff();
-      } else {
-        alert(result.message || "Failed to update status");
-      }
-    } catch (err: any) {
-      alert(err.message || "Something went wrong");
-      console.error(err);
-    }
-  };
-
-  if (!isLoggedIn) return null;
+    fetchStaffs();
+  }, [debouncedSearchTerm, currentPage, limit]);
 
   return (
     <div className="flex h-screen bg-background">
-      {/* Sidebar */}
       <Sidebar />
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-auto">
-        <div className="p-8">
-          <Header />
+      <div className="w-full flex-1 overflow-auto p-8">
+        <Header />
+        {/* Table */}
+        <NMTable columns={columns} data={staffData} />
 
-          {/* Staff Table */}
-          <Card className="border-0 shadow-sm">
-            <CardHeader>
-              <CardTitle>Staff Members</CardTitle>
-              <CardDescription>View and manage your team</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="py-10 text-center text-muted-foreground">
-                  Loading staff members...
-                </div>
-              ) : error ? (
-                <div className="py-10 text-center text-destructive">
-                  {error}
-                </div>
-              ) : staffList.length === 0 ? (
-                <div className="py-10 text-center text-muted-foreground">
-                  No staff members found
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="text-left py-3 px-4 font-semibold text-foreground">
-                          Name
-                        </th>
-                        <th className="text-left py-3 px-4 font-semibold text-foreground">
-                          Type
-                        </th>
-                        <th className="text-left py-3 px-4 font-semibold text-foreground">
-                          Capacity
-                        </th>
-                        {/* <th className="text-left py-3 px-4 font-semibold text-foreground">
-                          Today's Load
-                        </th> */}
-                        <th className="text-left py-3 px-4 font-semibold text-foreground">
-                          Status
-                        </th>
-                        <th className="text-left py-3 px-4 font-semibold text-foreground">
-                          Action
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {staffList.map((staff) => (
-                        <tr
-                          key={staff.id}
-                          className="border-b border-border hover:bg-muted/50 transition-colors"
-                        >
-                          <td className="py-3 px-4 font-medium">
-                            {staff.name}
-                          </td>
-                          <td className="py-3 px-4 text-muted-foreground">
-                            {staff.serviceType}
-                          </td>
-                          <td className="py-3 px-4">{staff.dailyCapacity}</td>
-                          {/* <td className="py-3 px-4">
-                            <div className="flex items-center gap-2">
-                              <div className="bg-gray-200 rounded-full h-2 w-24">
-                                <div
-                                  className="h-2 rounded-full bg-primary"
-                                  style={{ width: "0%" }}
-                                ></div>
-                              </div>
-                              <span className="text-sm text-muted-foreground">
-                                — / {staff.dailyCapacity}
-                              </span>
-                            </div>
-                          </td> */}
-                          <td className="py-3 px-4">
-                            <span
-                              className={`text-xs px-3 py-1 rounded-full font-medium ${
-                                staff.status === "Available"
-                                  ? "bg-green-100 text-green-700"
-                                  : "bg-yellow-100 text-yellow-700"
-                              }`}
-                            >
-                              {staff.status}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4">
-                            <select
-                              value={staff.status}
-                              onChange={(e) =>
-                                handleStatusChange(
-                                  staff.id,
-                                  e.target.value as "Available" | "OnLeave",
-                                )
-                              }
-                              className="text-sm px-2 py-1 border border-border rounded bg-background"
-                            >
-                              <option value="Available">Available</option>
-                              <option value="OnLeave">On Leave</option>
-                            </select>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+        {/* Pagination */}
+        {meta.total > 0 && (
+          <TablePagination
+            currentPage={meta.page}
+            totalPages={meta.totalPages}
+            pageSize={meta.limit}
+            totalItems={meta.total}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={(newSize) => {
+              setLimit(newSize);
+              setCurrentPage(1);
+            }}
+            pageSizeOptions={[5, 10, 20, 50, 100]}
+          />
+        )}
+
+        {/* Confirmation Modal */}
+        <ConfirmStaffStatusChangeModal
+          modalState={confirmModal}
+          onClose={closeConfirmModal}
+          onConfirm={confirmStatusChange}
+        />
       </div>
     </div>
   );
-}
+};
+
+export default StaffManagement;

@@ -4,7 +4,8 @@ import { BASE_URL } from "@/lib/BaseUrl";
 import { cookies } from "next/headers";
 
 // Get all staff members
-export const getAllStaff = async (page = 1, limit = 25) => {
+export const getAllStaff = async (params: { page: number; limit: number }) => {
+    const { page = 1, limit = 25 } = params;
     try {
         const accessToken = (await cookies()).get("accessToken")?.value;
 
